@@ -41,27 +41,34 @@
     .tile:hover{box-shadow:0 4px 12px #0009, inset 0 0 0 1px #2a3550}
     .tile.flow{background:var(--flow)}
     .tile.fail{background:var(--fail); box-shadow: 0 0 16px #ff4d4d55, inset 0 0 0 1px #3a1f26;}
+    /* O wrapper agora ocupa todo o tile */
     .glyph{
-      font-size:28px;
-      font-weight:800;
-      color:#80a6d8;
-      opacity:1;              /* <<< era .1: deixa a imagem 100% visível */
-      position:relative;
-      z-index:6;              /* acima das arms */
-      transition:transform .18s;
+      position: absolute;   /* antes era relative */
+      inset: 0;             /* sem padding/margin - ocupa 100% */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transform-origin: 50% 50%;
+      font-size: 28px;      /* irrelevante agora, mas mantido */
+      font-weight: 800;
+      color: #80a6d8;
+      opacity: 1;           /* nada de imagem “lavada” */
+      z-index: 10;          /* acima da lava */
+      transition: transform .18s;
+    }
+    
+    /* A imagem preenche o container exatamente */
+    .tile-img{
+      width: 100%;
+      height: 100%;
+      object-fit: contain;   /* PNG quadrado; se quiser cortar, use 'cover' */
+      pointer-events: none;
+      display: block;
+      position: relative;
+      z-index: 11;           /* acima da lava */
+      filter: drop-shadow(0 0 3px #000d) brightness(1.2) contrast(1.2);
     }
 
-    .tile-img{
-      width:72%;
-      height:72%;
-      object-fit:contain;
-      pointer-events:none;             /* não bloqueia o clique de girar */
-      display:block;
-      position:relative;
-      z-index:7;                       /* imagem do cano sempre por cima da lava */
-      /* deixa o cano menos “opaco” visualmente (mais vivo) */
-      filter: drop-shadow(0 1px 3px #000a) brightness(1.25) contrast(1.25) saturate(1.1);
-    }
 
 
 
@@ -705,5 +712,6 @@
 
 </body>
 </html>
+
 
 
