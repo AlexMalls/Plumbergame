@@ -11,7 +11,7 @@
       --blue:#4da6ff; --blue-dim:#7bb3ff;
       --red:#ff4d4d; --flow:#2b6cff22; --fail:#ff4d4d1f;
       --tile: 72px;
-      --flow-thick: 26px;
+      --flow-thick: 26px;   /* espessura do fluxo (lava) */
     }
     *{box-sizing:border-box}
     body{
@@ -42,18 +42,19 @@
     .tile.flow{background:var(--flow)}
     .tile.fail{background:var(--fail); box-shadow: 0 0 16px #ff4d4d55, inset 0 0 0 1px #3a1f26;}
 
+    /* Fundo do cano (atrás da lava) */
     .pipe-bg{
-      position:absolute;
-      inset:0;
-      width:100%;
-      height:100%;
+      position:absolute; inset:0;
+      width:100%; height:100%;
       object-fit:contain;
-      z-index:0;             /* atrás da lava */
       pointer-events:none;
       filter: drop-shadow(0 0 2px #0009);
     }
+    /* Para '+' temos duas camadas de fundo */
+    .pipe-bg.bg-v{ z-index:0; } /* vertical no fundo */
+    .pipe-bg.bg-h{ z-index:2; } /* horizontal acima do vertical (e acima da lava vertical) */
 
-    /* O wrapper agora ocupa todo o tile */
+    /* Wrapper do png do cano (por cima da lava) */
     .glyph{
       position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
       transform-origin:50% 50%;
@@ -65,19 +66,17 @@
       filter: drop-shadow(0 0 3px #000d) brightness(1.2) contrast(1.2);
     }
 
-    /* “água” (inicia invisível) — textura de lava */
+    /* LAVA (inicia invisível) */
     .arm{
       position:absolute; opacity:0;
       background-image: url("https://as2.ftcdn.net/v2/jpg/04/64/01/75/1000_F_464017578_mDXDssMUGQZ3tZxdepXwyWbYwYGJwU7A.jpg");
-      background-size: cover;
-      background-position: center;
-      background-repeat: no-repeat;
-      box-shadow:0 0 8px #ff4500aa; /* brilho lava suave */
+      background-size: cover; background-position: center; background-repeat: no-repeat;
+      box-shadow:0 0 8px #ff4500aa;
       border-radius:99px;
       transform: scaleX(0);
-      z-index:1; /* lava acima do fundo, abaixo do cano */
+      z-index:1; /* base: abaixo da imagem do cano e do bg-h */
     }
-    /* AJUSTE: centralizada pela espessura */
+    /* Centralização pela espessura */
     .arm.top, .arm.bottom{
       width: var(--flow-thick);
       height:50%;
@@ -94,7 +93,12 @@
     .arm.left{ left:0; transform-origin: right; }
     .arm.right{ right:0; transform-origin: left; }
 
-    /* AJUSTE: conectores sempre por cima */
+    /* Para cumprir a regra do '+':
+       - lava vertical (top/bottom) fica sob bg-h (z=1)
+       - lava horizontal (left/right) deve ficar acima de todos os backgrounds (z=3) */
+    .arm.left, .arm.right{ z-index:3; } /* acima dos bg-h e bg-v */
+
+    /* Conectores: sempre por cima */
     .connector{
       position:absolute;width:14px;height:14px;border-radius:50%;
       background:var(--blue);opacity:.9;box-shadow:0 0 12px var(--blue-dim);
@@ -105,7 +109,7 @@
     .bottom{bottom:-4px;left:50%;transform:translateX(-50%)}
     .left{left:-4px;top:50%;transform:translateY(-50%)}
 
-    .marker{position:absolute;font-size:16px;color:var(--red);text-shadow:0 0 6px #f003; z-index:4;}
+    .marker{position:absolute;font-size:16px;color:var(--red);text-shadow:0 0 6px #f003; z-index:40;}
     .marker.start{top:2px;left:4px}
     .marker.end{bottom:2px;right:4px}
     .marker.end.topright{top:2px;right:4px}
@@ -125,7 +129,7 @@
 
     .status{min-height:20px;color:var(--muted);text-align:center;margin-top:6px}
 
-    /* Overlay “Gerando…” */
+    /* Overlays */
     .overlay{
       position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
       backdrop-filter: blur(2px); pointer-events:none; opacity:0; transition:opacity .2s;
@@ -147,7 +151,6 @@
 
     .start-locked{ cursor:default !important; opacity:1; }
 
-    /* Tela de início */
     .overlay.intro{ background: radial-gradient(60% 60% at 50% 40%, #0008, #000d); }
     .overlay.intro .loader{ gap:16px; }
     .overlay.intro .loader .msg{ font-size:16px; opacity:.9; }
@@ -242,23 +245,19 @@
   const sleep=ms=>new Promise(r=>setTimeout(r,ms));
   function rndChoice(arr){return arr[(Math.random()*arr.length)|0];}
   function randomInt(n){ return (Math.random()*n)|0; }
-  // Mapeia o símbolo ("T","L","-","+") para o PNG na pasta Assets/Imagens
+
   function imgSrcForSymbol(sym){
-    // encodeURIComponent garante que '+' funcione em URL (vira %2B)
     return `Assets/Imagens/${encodeURIComponent(sym)}.png`;
   }
-  // AJUSTE: Fundo por símbolo com URL codificada (espaços e +)
   function bgSrcForSymbol(sym, rot){
-    const base = "Assets/Imagens/";
-    if(sym === "+"){
-      const hv = (rot % 2 === 0) ? "Horizontal" : "Vertical";
-      return base + encodeURIComponent(`+ ${hv} background`) + ".png";
-    }
-    return base + encodeURIComponent(`${sym} Background`) + ".png";
+    // não usado no '+'
+    return `Assets/Imagens/${encodeURIComponent(`${sym} Background`)}.png`;
+  }
+  function plusBgSrc(orientation /* "Horizontal"|"Vertical" */){
+    return `Assets/Imagens/${encodeURIComponent(`+ ${orientation} background`)}.png`;
   }
 
   function setArmOrigin(t, dir, phase){
-    // phase: "toCenter" => borda->centro | "toBorder" => centro->borda
     const el = t.arms?.[dir]; if(!el) return;
     if(phase === "toCenter"){
       el.style.transformOrigin =
@@ -488,7 +487,6 @@
     t.armProgress[dir]=p;
     const el = t.arms[dir];
     if(!el) return;
-    // Mantém invisível quando p==0; aparece conforme avança.
     el.style.opacity = p>0 ? 1 : 0;
     if(dir===N || dir===S){
       el.style.transform = `scaleY(${p})`;
@@ -513,11 +511,13 @@
     });
   }
   function updateTileVisual(t){
-    // Aplica rotação no cano e no fundo
     if(t.glyph){
       t.glyph.style.transform = `rotate(${t.rot*90}deg)`;
     }
-    if(t.bgEl){
+    if(t.symbol === "+"){
+      if(t.bgElH){ t.bgElH.style.transform = `rotate(${t.rot*90}deg)`; t.bgElH.src = plusBgSrc("Horizontal"); }
+      if(t.bgElV){ t.bgElV.style.transform = `rotate(${t.rot*90}deg)`; t.bgElV.src = plusBgSrc("Vertical"); }
+    }else if(t.bgEl){
       t.bgEl.style.transform = `rotate(${t.rot*90}deg)`;
       t.bgEl.src = bgSrcForSymbol(t.symbol, t.rot);
     }
@@ -528,13 +528,29 @@
     el.className="tile";
     t.el=el;
 
-    // (1) FUNDO do cano (atrás da lava)
-    const bg=document.createElement("img");
-    bg.className="pipe-bg";
-    bg.src = bgSrcForSymbol(t.symbol, t.rot);
-    bg.alt = `${t.symbol} background`;
-    el.appendChild(bg);
-    t.bgEl = bg;
+    // (1) FUNDOS
+    if(t.symbol === "+"){
+      const bgV=document.createElement("img");
+      bgV.className="pipe-bg bg-v";
+      bgV.src = plusBgSrc("Vertical");
+      bgV.alt = "+ vertical background";
+      el.appendChild(bgV);
+      t.bgElV = bgV;
+
+      const bgH=document.createElement("img");
+      bgH.className="pipe-bg bg-h";
+      bgH.src = plusBgSrc("Horizontal");
+      bgH.alt = "+ horizontal background";
+      el.appendChild(bgH);
+      t.bgElH = bgH;
+    }else{
+      const bg=document.createElement("img");
+      bg.className="pipe-bg";
+      bg.src = bgSrcForSymbol(t.symbol, t.rot);
+      bg.alt = `${t.symbol} background`;
+      el.appendChild(bg);
+      t.bgEl = bg;
+    }
 
     // (2) Lava
     ensureArms(t);
@@ -551,7 +567,7 @@
     el.appendChild(glyph);
     t.glyph=glyph;
 
-    // conectores e marcadores (mantém igual)
+    // conectores e marcadores
     drawConnectors(el,t.symbol,t.rot);
     if(t.r===0&&t.c===0){ const m=document.createElement("div"); m.className="marker start"; m.textContent="▶"; el.appendChild(m); }
     if(t.r===0&&t.c===COLS-1){ const m=document.createElement("div"); m.className="marker end topright"; m.textContent="▶"; el.appendChild(m); }
@@ -560,13 +576,12 @@
     // clique para girar
     el.addEventListener("click",()=>{
       if(t.lockedStart) return;
-      if(filling.has(key(t.r,t.c))) return; // só bloqueia se está enchendo
+      if(filling.has(key(t.r,t.c))) return;
       t.rot=(t.rot+1)%4;
-      updateTileVisual(t);            // <<< atualiza rotação e fundo
+      updateTileVisual(t);
       drawConnectors(el,t.symbol,t.rot);
     });
 
-    // aplica estado inicial (rotação/fundo)
     updateTileVisual(t);
     return el;
   }
@@ -605,7 +620,6 @@
     const t=tiles[idx(front.r,front.c)];
     t.el.classList.add("flow");
 
-    // marca peça como “ocupada” para bloquear clique só nela
     const k = key(front.r,front.c);
     filling.add(k);
 
@@ -656,7 +670,6 @@
   
     flowAbort = false;
 
-    // Visto para evitar loops: chave = "r,c,incoming"
     const seen = new Set();
 
     async function runBranch(front){
@@ -667,11 +680,9 @@
       if(seen.has(sig)) return { reachedTop:false, reachedBottom:false };
       seen.add(sig);
 
-      // anima o tile atual
       const res = await animateThroughTile(front);
       let top = res.reachedTop, bottom = res.reachedBottom;
 
-      // segue para os filhos **em paralelo**
       const childPromises = res.children.map(ch => runBranch(ch));
       const results = await Promise.all(childPromises);
 
@@ -682,7 +693,6 @@
       return { reachedTop: top, reachedBottom: bottom };
     }
 
-    // inicia um único ramo a partir do START
     const finalRes = await runBranch({ r: START.r, c: START.c, incoming: START.incoming });
 
     running = false;
@@ -743,4 +753,3 @@
 
 </body>
 </html>
-
