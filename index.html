@@ -46,10 +46,13 @@
       width:72%;
       height:72%;
       object-fit:contain;
-      pointer-events:none;       /* não bloquear clique de girar */
-      filter: drop-shadow(0 0 2px #0008);
+      pointer-events:none;
+      filter: drop-shadow(0 0 3px #000d) brightness(1.15) contrast(1.2);
       display:block;
+      position: relative;
+      z-index: 5; /* >>> força ficar por cima da lava */
     }
+
 
     /* “água” (inicia invisível) — agora com textura de lava e brilho lava */
     .arm{
@@ -691,3 +694,4 @@
 
 </body>
 </html>
+
