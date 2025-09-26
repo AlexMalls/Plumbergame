@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Pipe Puzzle — aleatório (com preenchimento lento)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root{
+      --bg:#0e1116; --panel:#1b1f27; --tile-bg:#2a2f3a;
+      --text:#e0e6f0; --muted:#9fb0c6;
+      --blue:#4da6ff; --blue-dim:#7bb3ff;
+      --red:#ff4d4d; --flow:#2b6cff22; --fail:#ff4d4d1f;
+      --tile: 72px;
+      --flow-thick: 12px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;background:var(--bg);color:var(--text);
+      font:15px/1.3 system-ui,Segoe UI,Roboto,Arial;
+      min-height:100vh;display:flex;align-items:center;justify-content:center;padding:18px;
+    }
+    .wrap{display:flex;flex-direction:column;gap:12px;align-items:center;position:relative}
+    h1{margin:0 0 6px;font-size:20px;color:var(--blue);text-shadow:0 0 10px #0055aa}
+    .board{background:var(--panel);padding:12px;border-radius:14px;box-shadow:0 0 25px rgba(0,85,170,.35);position:relative}
+    #game{
+      display:grid;gap:6px;
+      grid-template-columns:repeat(5,var(--tile));
+      grid-template-rows:repeat(5,var(--tile));
+      background:#10151c;padding:10px;border-radius:12px;box-shadow:inset 0 0 0 1px #0f1218;
+      transition: filter .25s ease, opacity .25s ease;
+    }
+    .board.dimmed #game{ filter: blur(2.5px) brightness(.7) saturate(.85); }
+
+    .tile{
+      width:var(--tile);height:var(--tile);background:var(--tile-bg);border-radius:10px;
+      position:relative;display:flex;align-items:center;justify-content:center;
+      cursor:pointer;user-select:none;transition:background .2s, box-shadow .2s, transform .05s;
+      box-shadow:0 2px 6px #0007, inset 0 0 0 1px #202838;
+      overflow:hidden;
+    }
+    .tile:hover{box-shadow:0 4px 12px #0009, inset 0 0 0 1px #2a3550}
+    .tile.flow{background:var(--flow)}
+    .tile.fail{background:var(--fail); box-shadow: 0 0 16px #ff4d4d55, inset 0 0 0 1px #3a1f26;}
+    .glyph{font-size:28px;font-weight:800;color:#80a6d8;opacity:.5; /* mais discreto para não parecer “água” */ position:relative; z-index:2; transition:transform .18s}
+
+    /* “água” (inicia invisível) — agora com textura de lava e brilho lava */
+    .arm{
+      position:absolute; opacity:0;
+      background-image: url("https://as2.ftcdn.net/v2/jpg/04/64/01/75/1000_F_464017578_mDXDssMUGQZ3tZxdepXwyWbYwYGJwU7A.jpg");
+      background-size: cover;       /* recorta automaticamente para a grossura do braço */
+      background-position: center;
+      background-repeat: no-repeat;
+      box-shadow:0 0 8px #ff4500aa; /* brilho lava suave */
+      border-radius:99px; z-index:1;
+      transform: scaleX(0);
+    }
+    .arm.top, .arm.bottom{ width: var(--flow-thick); height:50%; left: calc(50% - 6px); transform: scaleY(0); }
+    .arm.left, .arm.right{ height: var(--flow-thick); width:50%; top: calc(50% - 6px); }
+    .arm.top{ top:0; transform-origin: bottom; }
+    .arm.bottom{ bottom:0; transform-origin: top; }
+    .arm.left{ left:0; transform-origin: right; }
+    .arm.right{ right:0; transform-origin: left; }
+
+    .connector{
+      position:absolute;width:14px;height:14px;border-radius:50%;
+      background:var(--blue);opacity:.9;box-shadow:0 0 12px var(--blue-dim); z-index:3;
+    }
+    .top{top:-4px;left:50%;transform:translateX(-50%)}
+    .right{right:-4px;top:50%;transform:translateY(-50%)}
+    .bottom{bottom:-4px;left:50%;transform:translateX(-50%)}
+    .left{left:-4px;top:50%;transform:translateY(-50%)}
+
+    .marker{position:absolute;font-size:16px;color:var(--red);text-shadow:0 0 6px #f003; z-index:4;}
+    .marker.start{top:2px;left:4px}
+    .marker.end{bottom:2px;right:4px}
+    .marker.end.topright{top:2px;right:4px}
+    .marker.end.bottomright{bottom:2px;right:4px}
+
+    .hud{display:flex;gap:8px;justify-content:center;margin-top:10px;flex-wrap:wrap}
+    button{
+      appearance:none;border:0;border-radius:10px;color:#fff;
+      padding:10px 14px;font-weight:600;cursor:pointer;
+      background:linear-gradient(135deg,#0077ff,#000000);
+      box-shadow:0 6px 16px rgba(0,119,255,.35);
+      transition:transform .08s, box-shadow .2s, opacity .2s;
+    }
+    button:hover{box-shadow:0 10px 24px rgba(0,119,255,.45)}
+    button:active{transform:translateY(1px) scale(.99)}
+    button:disabled{opacity:.55; cursor:not-allowed}
+
+    .status{min-height:20px;color:var(--muted);text-align:center;margin-top:6px}
+
+    /* Overlay “Gerando…” */
+    .overlay{
+      position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+      backdrop-filter: blur(2px); pointer-events:none; opacity:0; transition:opacity .2s;
+    }
+    .overlay.show{ pointer-events:auto; opacity:1; }
+    .loader{
+      min-width:240px; padding:20px 26px; border-radius:16px;
+      background: radial-gradient(120% 120% at 50% -10%, #1e2b3f, #0c0f16);
+      box-shadow: 0 10px 30px #000a, inset 0 0 0 1px #2b3c55;
+      display:flex; flex-direction:column; align-items:center; gap:12px;
+    }
+    .spinner{
+      width:34px; height:34px; border-radius:50%;
+      border:3px solid #163461; border-top-color: var(--blue);
+      animation: spin 1s linear infinite;
+    }
+    .loader .msg{ color:#cfe2ff; font-weight:700; letter-spacing:.2px; text-shadow:0 0 12px #1a5fff66;}
+    @keyframes spin{ to{ transform: rotate(360deg); } }
+
+    .start-locked{ cursor:default !important; opacity:1; }
+
+    /* Tela de início */
+    .overlay.intro{ background: radial-gradient(60% 60% at 50% 40%, #0008, #000d); }
+    .overlay.intro .loader{ gap:16px; }
+    .overlay.intro .loader .msg{ font-size:16px; opacity:.9; }
+    .overlay.intro .loader .big{ font-size:16px; padding:12px 18px; }
+  </style>
+</head>
+<body>
+  <div class="wrap" id="wrap">
+    <h1>Pipe Puzzle — debug de conectores (aleatório)</h1>
+    <div class="board" id="board">
+      <div id="game"></div>
+      <div class="hud">
+        <button id="btnStart">Iniciar</button>
+        <button id="btnReset">Gerar novo</button>
+      </div>
+      <div id="status" class="status"></div>
+
+      <!-- Véu inicial -->
+      <div id="intro" class="overlay intro">
+        <div class="loader">
+          <div class="msg">Mapa pronto. Clique para começar.</div>
+          <button id="btnIntroStart" class="big">Iniciar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Overlay “Gerando…” -->
+    <div id="overlay" class="overlay">
+      <div class="loader">
+        <div class="spinner"></div>
+        <div class="msg">Gerando…</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // ===== CONFIG =====
+  const ROWS = 8, COLS = 10;
+
+  const MAX_STREAK = 1;
+  const MAX_PASSES = 1;
+
+  const MIN_T = 4;
+  const MAX_T = 4;
+  const MAX_GEN_TRIES = 200;
+  const T_FORBIDDEN_MARGIN = 2;
+
+  const WEIGHTS_SIDE      = { "-": 0.20, "L": 0.80, "+": 0.00, "T": 0.00 };
+  const WEIGHTS_TOPBOTTOM = { "-": 0.20, "L": 0.80, "+": 0.00, "T": 0.00 };
+  const WEIGHTS_CENTER    = { "-": 0.35, "L": 0.44, "+": 0.20, "T": 0.01  };
+
+  // Direções
+  const N=0,E=1,S=2,W=3, opp=d=>(d+2)%4;
+  const BASE={
+    "-":[W,E],
+    "L":[N,E],
+    "+":[N,E,S,W],
+    "T":[W,E,S]
+  };
+
+  // Objetivos
+  const START={r:0,c:0,incoming:W};
+  const GOAL_TOP={r:0,c:COLS-1,out:E};
+  const GOAL_BOTTOM={r:ROWS-1,c:COLS-1,out:E};
+
+  // ===== Velocidade do preenchimento (meia perna) =====
+  let FILL_HALF_MS = 5000;
+
+  // ===== Estado / elementos =====
+  const board=document.getElementById("board");
+  const overlay=document.getElementById("overlay");
+  const intro=document.getElementById("intro");
+  const gameEl=document.getElementById("game");
+  const statusEl=document.getElementById("status");
+  const btnStart=document.getElementById("btnStart");
+  const btnIntroStart=document.getElementById("btnIntroStart");
+  const btnReset=document.getElementById("btnReset");
+
+  let tiles=[];
+  let flowAbort=false;
+  let running=false;              // fluxo em execução
+  const filling=new Set();        // peças atualmente sendo preenchidas (bloqueia clique só nelas)
+
+  // Utils
+  const idx=(r,c)=>r*COLS+c;
+  const key=(r,c)=>r+","+c;
+  const inBounds=(r,c)=>r>=0&&c>=0&&r<ROWS&&c<COLS;
+  const rotateDir=(d,rot)=>(d+rot)%4;
+  const rotateDirs=(dirs,rot)=>dirs.map(d=>rotateDir(d,rot));
+  const connectClass=d=>d===N?"top":d===E?"right":d===S?"bottom":"left";
+  const step=(p,d)=>({r:p.r+(d===S?1:d===N?-1:0),c:p.c+(d===E?1:d===W?-1:0)});
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  function rndChoice(arr){return arr[(Math.random()*arr.length)|0];}
+  function randomInt(n){ return (Math.random()*n)|0; }
+
+  function setArmOrigin(t, dir, phase){
+    // phase: "toCenter" => borda->centro | "toBorder" => centro->borda
+    const el = t.arms?.[dir]; if(!el) return;
+    if(phase === "toCenter"){
+      el.style.transformOrigin =
+        (dir===N?"top":dir===S?"bottom":dir===W?"left":"right");
+    }else{
+      el.style.transformOrigin =
+        (dir===N?"bottom":dir===S?"top":dir===W?"right":"left");
+    }
+  }
+
+  const isGoalCell = (r,c) =>
+    (r===GOAL_TOP.r && c===GOAL_TOP.c) || (r===GOAL_BOTTOM.r && c===GOAL_BOTTOM.c);
+
+  function plusExitFor(entry){
+    if(entry===N) return S; if(entry===S) return N; if(entry===W) return E; if(entry===E) return W; return null;
+  }
+
+  function debugConnectors(symbol,rot){return rotateDirs(BASE[symbol],rot);}
+
+  function rotFor(symbol, a, b){
+    const want=[a,b].slice().sort().join(",");
+    for(let r=0;r<4;r++){
+      const have=rotateDirs(BASE[symbol],r).slice().sort().join(",");
+      if(have===want) return r;
+    }
+    return 0;
+  }
+
+  // ===== Anti-faixas =====
+  function isVerticalStraightTile(t){
+    if(t.symbol === "+") return true;
+    if(t.symbol === "-") return (t.rot & 1) === 1;
+    return false;
+  }
+  function isHorizontalStraightTile(t){
+    if(t.symbol === "+") return true;
+    if(t.symbol === "-") return (t.rot & 1) === 0;
+    return false;
+  }
+  function setBendL(r,c){
+    const t = tiles[idx(r,c)];
+    if(!t || t.lockedStart || t.lockedGoal) return false;
+    t.symbol = "L";
+    const curves = [[N,E],[E,S],[S,W],[W,N]];
+    const pick = curves[(Math.random()*4)|0];
+    t.rot = rotFor("L", pick[0], pick[1]);
+    return true;
+  }
+  function breakLongStraights(maxStreak = MAX_STREAK, maxPasses = MAX_PASSES){
+    let changed = false;
+    for(let pass=0; pass<maxPasses; pass++){
+      changed = false;
+
+      // Colunas
+      for(let c=0; c<COLS; c++){
+        let run = [];
+        for(let r=0; r<ROWS; r++){
+          const t = tiles[idx(r,c)];
+          if(isVerticalStraightTile(t)) run.push({r,c});
+          else{
+            if(run.length > maxStreak){
+              const mid = run[Math.floor(run.length/2)];
+              changed = setBendL(mid.r, mid.c) || changed;
+            }
+            run = [];
+          }
+        }
+        if(run.length > maxStreak){
+          const mid = run[Math.floor(run.length/2)];
+          changed = setBendL(mid.r, mid.c) || changed;
+        }
+      }
+
+      // Linhas
+      for(let r=0; r<ROWS; r++){
+        let run = [];
+        for(let c=0; c<COLS; c++){
+          const t = tiles[idx(r,c)];
+          if(isHorizontalStraightTile(t)) run.push({r,c});
+          else{
+            if(run.length > maxStreak){
+              const mid = run[Math.floor(run.length/2)];
+              changed = setBendL(mid.r, mid.c) || changed;
+            }
+            run = [];
+          }
+        }
+        if(run.length > maxStreak){
+          const mid = run[Math.floor(run.length/2)];
+          changed = setBendL(mid.r, mid.c) || changed;
+        }
+      }
+
+      if(!changed) break;
+    }
+  }
+
+  // ===== Regras do 'T' =====
+  function isAllowedT(r,c){
+    if (isGoalCell(r,c)) return true;
+    const m = T_FORBIDDEN_MARGIN;
+    if (ROWS < m*2+1 || COLS < m*2+1) return true;
+    return (r >= m && r < ROWS - m && c >= m && c < COLS - m);
+  }
+  function countSymbolIn(boardArr, sym){
+    let n=0; for(const t of boardArr){ if(t && t.symbol===sym) n++; } return n;
+  }
+  function listIndices(boardArr, predicate){
+    const ids=[]; for(const t of boardArr){ if(t && predicate(t)) ids.push(idx(t.r,t.c)); } return ids;
+  }
+
+  // ===== Geração =====
+  function generateOnce(){
+    const gen = new Array(ROWS*COLS).fill(null);
+    for(let r=0;r<ROWS;r++){
+      for(let c=0;c<COLS;c++){
+        const id=idx(r,c);
+
+        if(r===0 && c===0){
+          const solRot = rotFor("-", W, E);
+          gen[id] = { r, c, symbol: "-", rot: solRot, el:null, glyph:null, lockedStart:true };
+          continue;
+        }
+        if (isGoalCell(r,c)) {
+          gen[id] = { r, c, symbol: "T", rot: 0, el:null, glyph:null, lockedGoal:true };
+          continue;
+        }
+
+        const weights = (c===0||c===COLS-1) ? WEIGHTS_SIDE : ((r===0||r===ROWS-1) ? WEIGHTS_TOPBOTTOM : WEIGHTS_CENTER);
+
+        const pool=[]; for(const k of Object.keys(weights)){ const n=Math.round(weights[k]*100); for(let t=0;t<n;t++) pool.push(k); }
+        let s = rndChoice(pool);
+        if(s==="T" && !isAllowedT(r,c)){
+          const poolNoT = pool.filter(x=>x!=="T");
+          s = poolNoT.length ? rndChoice(poolNoT) : "-";
+        }
+        const rot = (Math.random()*4)|0;
+        gen[id] = { r, c, symbol: s, rot, el:null, glyph:null };
+      }
+    }
+    return gen;
+  }
+  function allTsAllowed(boardArr){
+    for(const t of boardArr){
+      if(!t) continue;
+      if(t.symbol==="T" && !isAllowedT(t.r,t.c)) return false;
+    }
+    return true;
+  }
+  function forceTCount(boardArr, minT, maxT){
+    let tCount = countSymbolIn(boardArr, "T");
+    let outside = listIndices(boardArr, t => t.symbol==="T" && !isAllowedT(t.r,t.c) && !t.lockedGoal);
+    for(const id of outside){
+      if(Math.random() < 0.6){
+        boardArr[id].symbol = "L";
+        const curves = [[N,E],[E,S],[S,W],[W,N]];
+        const pick = curves[randomInt(4)];
+        boardArr[id].rot = rotFor("L", pick[0], pick[1]);
+      }else{
+        boardArr[id].symbol = "-";
+        boardArr[id].rot = randomInt(4);
+      }
+      tCount--;
+    }
+    while(tCount < minT){
+      const candidates = listIndices(boardArr, t => !t.lockedStart && !t.lockedGoal && isAllowedT(t.r,t.c) && t.symbol !== "T");
+      if(candidates.length === 0) break;
+      const id = candidates[randomInt(candidates.length)];
+      boardArr[id].symbol = "T";
+      boardArr[id].rot = randomInt(4);
+      tCount++;
+    }
+    while(tCount > maxT){
+      const candidates = listIndices(boardArr, t => !t.lockedStart && !t.lockedGoal && isAllowedT(t.r,t.c) && t.symbol === "T");
+      if(candidates.length === 0) break;
+      const id = candidates[randomInt(candidates.length)];
+      if(Math.random() < 0.6){
+        boardArr[id].symbol = "L";
+        const curves = [[N,E],[E,S],[S,W],[W,N]];
+        const pick = curves[randomInt(4)];
+        boardArr[id].rot = rotFor("L", pick[0], pick[1]);
+      }else{
+        boardArr[id].symbol = "-";
+        boardArr[id].rot = randomInt(4);
+      }
+      tCount--;
+    }
+  }
+  function generateBoardRandom({minT=MIN_T, maxT=MAX_T, maxTries=MAX_GEN_TRIES} = {}){
+    for(let tries=0; tries<maxTries; tries++){
+      const candidate = generateOnce();
+      const tCount = countSymbolIn(candidate, "T");
+      if(tCount >= minT && tCount <= maxT && allTsAllowed(candidate)){
+        tiles = candidate;
+        return true;
+      }
+    }
+    tiles = generateOnce();
+    forceTCount(tiles, minT, maxT);
+    return true;
+  }
+
+  // ===== Render =====
+  function drawConnectors(el,symbol,rot){
+    el.querySelectorAll(".connector").forEach(n=>n.remove());
+    debugConnectors(symbol,rot).forEach(d=>{
+      const dot=document.createElement("div");
+      dot.className="connector "+connectClass(d);
+      el.appendChild(dot);
+    });
+  }
+  function ensureArms(t){
+    if(t.arms) return;
+    t.arms = {};
+    t.armProgress = [0,0,0,0]; // N,E,S,W (0..1)
+    const mk = (cls)=>{ const d=document.createElement("div"); d.className="arm "+cls; return d; };
+    t.arms[N] = mk("top");
+    t.arms[E] = mk("right");
+    t.arms[S] = mk("bottom");
+    t.arms[W] = mk("left");
+    t.el.appendChild(t.arms[N]);
+    t.el.appendChild(t.arms[E]);
+    t.el.appendChild(t.arms[S]);
+    t.el.appendChild(t.arms[W]);
+  }
+  function setArmProgress(t, dir, p){
+    t.armProgress[dir]=p;
+    const el = t.arms[dir];
+    if(!el) return;
+    // Mantém invisível quando p==0; aparece conforme avança.
+    el.style.opacity = p>0 ? 1 : 0;
+    if(dir===N || dir===S){
+      el.style.transform = `scaleY(${p})`;
+    }else{
+      el.style.transform = `scaleX(${p})`;
+    }
+  }
+  function animateArmTo(t, dir, to, duration){
+    return new Promise(resolve=>{
+      const from = t.armProgress ? t.armProgress[dir]||0 : 0;
+      const start = performance.now();
+      const tick = (now)=>{
+        if(flowAbort){ resolve("aborted"); return; }
+        const k = Math.min(1, (now - start)/duration);
+        const eased = k*k*(3 - 2*k);
+        const v = from + (to - from)*eased;
+        setArmProgress(t, dir, v);
+        if(k<1) requestAnimationFrame(tick);
+        else resolve("done");
+      };
+      requestAnimationFrame(tick);
+    });
+  }
+
+  function makeTile(t){
+    const el=document.createElement("div");
+    el.className="tile";
+    t.el=el;
+
+    ensureArms(t);
+
+    const glyph=document.createElement("span");
+    glyph.className="glyph";
+    glyph.textContent=t.symbol;
+    glyph.style.transform=`rotate(${t.rot*90}deg)`;
+    el.appendChild(glyph);
+
+    drawConnectors(el,t.symbol,t.rot);
+
+    if(t.r===0&&t.c===0){ const m=document.createElement("div"); m.className="marker start"; m.textContent="▶"; el.appendChild(m); }
+    if(t.r===0&&t.c===COLS-1){ const m=document.createElement("div"); m.className="marker end topright"; m.textContent="▶"; el.appendChild(m); }
+    if(t.r===ROWS-1&&t.c===COLS-1){ const m=document.createElement("div"); m.className="marker end bottomright"; m.textContent="▶"; el.appendChild(m); }
+
+    // Agora só bloqueia a peça que está sendo preenchida
+    el.addEventListener("click",()=>{
+      if(t.lockedStart) return;
+      // if(t.lockedGoal) return;
+      if(filling.has(key(t.r,t.c))) return; // bloqueio fino: só a peça ativa
+      t.rot=(t.rot+1)%4;
+      glyph.style.transform=`rotate(${t.rot*90}deg)`;
+      drawConnectors(el,t.symbol,t.rot);
+    });
+
+    t.glyph=glyph;
+    return el;
+  }
+
+  function render(){
+    gameEl.style.gridTemplateColumns=`repeat(${COLS}, var(--tile))`;
+    gameEl.style.gridTemplateRows=`repeat(${ROWS}, var(--tile))`;
+    gameEl.innerHTML="";
+    tiles.forEach(t=>gameEl.appendChild(makeTile(t)));
+  }
+
+  function status(msg=""){ statusEl.textContent=msg; }
+
+  // ===== Fluxo lento =====
+  function outsFor(t, incoming){
+    const dirs=rotateDirs(BASE[t.symbol],t.rot);
+    if(t.symbol==="+"){
+      const out=plusExitFor(incoming);
+      return out==null?[]:[out];
+    }
+    if(t.symbol==="T"){
+      return dirs.filter(d=>d!==incoming);
+    }
+    if(!dirs.includes(incoming)) return [];
+    return [dirs[0]===incoming?dirs[1]:dirs[0]];
+  }
+  function isGoalExit(cell,outDir){
+    if(cell.r===GOAL_TOP.r&&cell.c===GOAL_TOP.c&&outDir===GOAL_TOP.out&&!inBounds(step(cell,outDir).r,step(cell,outDir).c)) return "TOP";
+    if(cell.r===GOAL_BOTTOM.r&&cell.c===GOAL_BOTTOM.c&&outDir===GOAL_BOTTOM.out&&!inBounds(step(cell,outDir).r,step(cell,outDir).c)) return "BOTTOM";
+    return null;
+  }
+
+  async function animateThroughTile(front){
+    if(!inBounds(front.r,front.c)) return {children:[], reachedTop:false, reachedBottom:false};
+
+    const t=tiles[idx(front.r,front.c)];
+    t.el.classList.add("flow");
+
+    // marca peça como “ocupada” para bloquear clique só nela
+    const k = key(front.r,front.c);
+    filling.add(k);
+
+    ensureArms(t);
+    const dirs=rotateDirs(BASE[t.symbol],t.rot);
+    const hasIncoming = t.symbol==="+" ? true : dirs.includes(front.incoming) || t.symbol==="T";
+    if(!hasIncoming){
+      filling.delete(k);
+      return {children:[], reachedTop:false, reachedBottom:false};
+    }
+
+    // 1) entrada: BORDA -> CENTRO
+    setArmOrigin(t, front.incoming, "toCenter");
+    await animateArmTo(t, front.incoming, 1, FILL_HALF_MS);
+
+    // 2) saídas: do CENTRO -> BORDA
+    const outs = outsFor(t, front.incoming);
+    await Promise.all(outs.map(async (out)=>{
+      setArmOrigin(t, out, "toBorder");
+      await animateArmTo(t, out, 1, FILL_HALF_MS);
+    }));
+
+    // flags corretos e push dos próximos tiles
+    let reachedTop=false, reachedBottom=false;
+    const children=[];
+    for(const out of outs){
+      const from = {r:front.r,c:front.c};
+      const goal = isGoalExit(from, out);
+      if(goal==="TOP") reachedTop=true;
+      if(goal==="BOTTOM") reachedBottom=true;
+
+      const nxt = step(from, out);
+      if(inBounds(nxt.r,nxt.c)){
+        children.push({r:nxt.r,c:nxt.c,incoming:opp(out)});
+      }
+    }
+
+    filling.delete(k);
+    return {children, reachedTop, reachedBottom};
+  }
+
+  async function runFlowSlow(){
+    if(running) return;
+    running = true;
+    btnStart.disabled = true; 
+    btnReset.disabled = true;
+    status("Fluxo lento em andamento…");
+  
+    flowAbort = false;
+
+    // Visto para evitar loops: chave = "r,c,incoming"
+    const seen = new Set();
+
+    async function runBranch(front){
+      if(flowAbort) return { reachedTop:false, reachedBottom:false };
+      if(!inBounds(front.r, front.c)) return { reachedTop:false, reachedBottom:false };
+
+      const sig = `${front.r},${front.c},${front.incoming}`;
+      if(seen.has(sig)) return { reachedTop:false, reachedBottom:false };
+      seen.add(sig);
+
+      // anima o tile atual
+      const res = await animateThroughTile(front);
+      let top = res.reachedTop, bottom = res.reachedBottom;
+
+      // segue para os filhos **em paralelo**
+      const childPromises = res.children.map(ch => runBranch(ch));
+      const results = await Promise.all(childPromises);
+
+      for(const r of results){
+        top = top || r.reachedTop;
+        bottom = bottom || r.reachedBottom;
+      }
+      return { reachedTop: top, reachedBottom: bottom };
+    }
+
+    // inicia um único ramo a partir do START
+    const finalRes = await runBranch({ r: START.r, c: START.c, incoming: START.incoming });
+
+    running = false;
+    btnStart.disabled = false; 
+    btnReset.disabled = false;
+  
+    if(flowAbort){
+      status("⚠️ Fluxo interrompido.");
+      return;
+    }
+    if(finalRes.reachedTop && finalRes.reachedBottom){
+      status("✅ As duas saídas foram alcançadas!");
+    }else if(finalRes.reachedTop || finalRes.reachedBottom){
+      status("ℹ️ Fluxo terminou. Alcançou apenas uma saída.");
+    }else{
+      status("ℹ️ Fluxo terminou sem alcançar as saídas.");
+    }
+  }
+
+  function stopFlow(){
+    flowAbort = true;
+    filling.clear();
+  }
+
+  // ===== Reset / Start =====
+  async function resetGame(){
+    stopFlow();
+    status("Gerando layout aleatório…");
+    overlay.classList.add("show");
+    await sleep(10);
+
+    generateBoardRandom({minT: MIN_T, maxT: MAX_T, maxTries: MAX_GEN_TRIES});
+    breakLongStraights();
+
+    render();
+    overlay.classList.remove("show");
+
+    board.classList.add("dimmed");
+    intro.classList.add("show");
+    status("Mapa oculto. Clique em Iniciar para revelar e começar o fluxo.");
+  }
+
+  function startGame(){
+    if(running) return;
+    intro.classList.remove("show");
+    board.classList.remove("dimmed");
+    runFlowSlow();
+  }
+
+  // ===== Eventos =====
+  btnStart.addEventListener("click", startGame);
+  btnIntroStart.addEventListener("click", startGame);
+  btnReset.addEventListener("click", resetGame);
+
+  // Init
+  resetGame();
+  </script>
+
+</body>
+</html>
