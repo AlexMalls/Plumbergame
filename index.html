@@ -10,24 +10,28 @@
       --text:#e0e6f0; --muted:#9fb0c6;
       --blue:#4da6ff; --blue-dim:#7bb3ff;
       --red:#ff4d4d; --flow:#2b6cff22; --fail:#ff4d4d1f;
-      --tile: 72px;
-      --flow-thick: 26px;   /* espessura do fluxo (lava) */
+      --tile: 72px;               /* valor de partida (JS recalcula p/ mobile) */
+      --flow-thick: 26px;         /* espessura do fluxo (lava) */
     }
     *{box-sizing:border-box}
+    html,body{height:100%}
     body{
       margin:0;background:var(--bg);color:var(--text);
       font:15px/1.3 system-ui,Segoe UI,Roboto,Arial;
       min-height:100vh;display:flex;align-items:center;justify-content:center;padding:18px;
+      -webkit-tap-highlight-color: transparent;
     }
-    .wrap{display:flex;flex-direction:column;gap:12px;align-items:center;position:relative}
+    .wrap{display:flex;flex-direction:column;gap:12px;align-items:center;position:relative;width:100%;max-width:100vw}
     h1{margin:0 0 6px;font-size:20px;color:var(--blue);text-shadow:0 0 10px #0055aa}
-    .board{background:var(--panel);padding:12px;border-radius:14px;box-shadow:0 0 25px rgba(0,85,170,.35);position:relative}
+    .board{background:var(--panel);padding:12px;border-radius:14px;box-shadow:0 0 25px rgba(0,85,170,.35);position:relative;touch-action:manipulation}
     #game{
       display:grid;gap:6px;
-      grid-template-columns:repeat(5,var(--tile));
-      grid-template-rows:repeat(5,var(--tile));
+      grid-template-columns:repeat(5,var(--tile)); /* JS atualiza p/ COLS reais */
+      grid-template-rows:repeat(5,var(--tile));    /* JS atualiza p/ ROWS reais */
       background:#10151c;padding:10px;border-radius:12px;box-shadow:inset 0 0 0 1px #0f1218;
       transition: filter .25s ease, opacity .25s ease;
+      max-width:calc(100vw - 24px);
+      max-height:calc(100vh - 220px); /* espaço p/ título e botões */
     }
     .board.dimmed #game{ filter: blur(2.5px) brightness(.7) saturate(.85); }
 
@@ -66,13 +70,13 @@
       filter: drop-shadow(0 0 3px #000d) brightness(1.2) contrast(1.2);
     }
 
-    /* LAVA (inicia invisível) */
+    /* LAVA (inicia invisível) — agora com cantos mais “quadrados” */
     .arm{
       position:absolute; opacity:0;
       background-image: url("https://as2.ftcdn.net/v2/jpg/04/64/01/75/1000_F_464017578_mDXDssMUGQZ3tZxdepXwyWbYwYGJwU7A.jpg");
       background-size: cover; background-position: center; background-repeat: no-repeat;
-      box-shadow:0 0 8px #ff4500aa;
-      border-radius:99px;
+      box-shadow:0 0 4px #ff450066;  /* brilho mais contido */
+      border-radius: 3px;            /* <<< menos arredondado */
       transform: scaleX(0);
       z-index:1; /* base: abaixo da imagem do cano e do bg-h */
     }
@@ -93,23 +97,18 @@
     .arm.left{ left:0; transform-origin: right; }
     .arm.right{ right:0; transform-origin: left; }
 
-    /* Para cumprir a regra do '+':
-       - lava vertical (top/bottom) fica sob bg-h (z=1)
-       - lava horizontal (left/right) deve ficar acima de todos os backgrounds (z=3) */
+    /* Regra do '+' (profundidade) */
     .arm.left, .arm.right{ z-index:3; } /* acima dos bg-h e bg-v */
-
-    /* Ajuste de camadas específicas para o '+' */
-    .pipe-bg.bg-v { z-index: 0 !important; }  /* sempre atrás de tudo */
-    .pipe-bg.bg-h { z-index: 2 !important; }  /* na frente do vertical e da lava vertical */
-    .plus .arm.top,
-    .plus .arm.bottom { z-index: 1 !important; }  /* vertical: entre bg-v (0) e bg-h (2) */
-    .plus .arm.left,
-    .plus .arm.right { z-index: 3 !important; }   /* horizontal: acima dos dois backgrounds */
+    .plus .arm.top, .plus .arm.bottom { z-index: 1 !important; }
+    .plus .arm.left, .plus .arm.right { z-index: 3 !important; }
     .plus .glyph { z-index: 10 !important; }
 
-    /* Conectores: sempre por cima */
+    /* Conectores: agora escalam com o tile */
     .connector{
-      position:absolute;width:14px;height:14px;border-radius:50%;
+      position:absolute;
+      width: clamp(8px, calc(var(--tile) * .18), 14px);
+      height: clamp(8px, calc(var(--tile) * .18), 14px);
+      border-radius:50%;
       background:var(--blue);opacity:.9;box-shadow:0 0 12px var(--blue-dim);
       z-index:30;
     }
@@ -131,6 +130,7 @@
       background:linear-gradient(135deg,#0077ff,#000000);
       box-shadow:0 6px 16px rgba(0,119,255,.35);
       transition:transform .08s, box-shadow .2s, opacity .2s;
+      touch-action: manipulation;
     }
     button:hover{box-shadow:0 10px 24px rgba(0,119,255,.45)}
     button:active{transform:translateY(1px) scale(.99)}
@@ -164,6 +164,14 @@
     .overlay.intro .loader{ gap:16px; }
     .overlay.intro .loader .msg{ font-size:16px; opacity:.9; }
     .overlay.intro .loader .big{ font-size:16px; padding:12px 18px; }
+
+    /* Melhorias específicas para telas touch (sem hover) */
+    @media (hover: none) {
+      h1{ font-size:18px; }
+      .hud{ gap:10px }
+      button{ padding:12px 16px; }
+      #game{ gap:5px; padding:8px }
+    }
   </style>
 </head>
 <body>
@@ -259,10 +267,9 @@
     return `Assets/Imagens/${encodeURIComponent(sym)}.png`;
   }
   function bgSrcForSymbol(sym, rot){
-    // não usado no '+'
     return `Assets/Imagens/${encodeURIComponent(`${sym} Background`)}.png`;
   }
-  function plusBgSrc(orientation /* "Horizontal"|"Vertical" */){
+  function plusBgSrc(orientation){
     return `Assets/Imagens/${encodeURIComponent(`+ ${orientation} background`)}.png`;
   }
 
@@ -369,7 +376,7 @@
     if (isGoalCell(r,c)) return true;
     const m = T_FORBIDDEN_MARGIN;
     if (ROWS < m*2+1 || COLS < m*2+1) return true;
-    return (r >= m && r < ROWS - m && c >= m && c < COLS - m);
+    return (r >= m && r < ROWS - m && c < COLS - m && c >= m);
   }
   function countSymbolIn(boardArr, sym){
     let n=0; for(const t of boardArr){ if(t && t.symbol===sym) n++; } return n;
@@ -423,34 +430,34 @@
       if(Math.random() < 0.6){
         boardArr[id].symbol = "L";
         const curves = [[N,E],[E,S],[S,W],[W,N]];
-        const pick = curves[randomInt(4)];
+        const pick = curves[Math.floor(Math.random()*4)];
         boardArr[id].rot = rotFor("L", pick[0], pick[1]);
       }else{
         boardArr[id].symbol = "-";
-        boardArr[id].rot = randomInt(4);
+        boardArr[id].rot = Math.floor(Math.random()*4);
       }
       tCount--;
     }
     while(tCount < minT){
       const candidates = listIndices(boardArr, t => !t.lockedStart && !t.lockedGoal && isAllowedT(t.r,t.c) && t.symbol !== "T");
       if(candidates.length === 0) break;
-      const id = candidates[randomInt(candidates.length)];
+      const id = candidates[Math.floor(Math.random()*candidates.length)];
       boardArr[id].symbol = "T";
-      boardArr[id].rot = randomInt(4);
+      boardArr[id].rot = Math.floor(Math.random()*4);
       tCount++;
     }
     while(tCount > maxT){
       const candidates = listIndices(boardArr, t => !t.lockedStart && !t.lockedGoal && isAllowedT(t.r,t.c) && t.symbol === "T");
       if(candidates.length === 0) break;
-      const id = candidates[randomInt(candidates.length)];
+      const id = candidates[Math.floor(Math.random()*candidates.length)];
       if(Math.random() < 0.6){
         boardArr[id].symbol = "L";
         const curves = [[N,E],[E,S],[S,W],[W,N]];
-        const pick = curves[randomInt(4)];
+        const pick = curves[Math.floor(Math.random()*4)];
         boardArr[id].rot = rotFor("L", pick[0], pick[1]);
       }else{
         boardArr[id].symbol = "-";
-        boardArr[id].rot = randomInt(4);
+        boardArr[id].rot = Math.floor(Math.random()*4);
       }
       tCount--;
     }
@@ -526,9 +533,11 @@
     if(t.symbol === "+"){
       if(t.bgElH){ t.bgElH.style.transform = `rotate(${t.rot*90}deg)`; t.bgElH.src = plusBgSrc("Horizontal"); }
       if(t.bgElV){ t.bgElV.style.transform = `rotate(${t.rot*90}deg)`; t.bgElV.src = plusBgSrc("Vertical"); }
+      t.el.classList.add('plus');
     }else if(t.bgEl){
       t.bgEl.style.transform = `rotate(${t.rot*90}deg)`;
       t.bgEl.src = bgSrcForSymbol(t.symbol, t.rot);
+      t.el.classList.remove('plus');
     }
   }
 
@@ -539,36 +548,33 @@
 
     // (1) FUNDOS
     if(t.symbol === "+"){
-      el.classList.add("plus");            // <<< aplica as regras de z-index do '+'
-
       const bgV=document.createElement("img");
       bgV.className="pipe-bg bg-v";
       bgV.src = plusBgSrc("Vertical");
       el.appendChild(bgV);
       t.bgElV = bgV;
 
-      // lava precisa vir ANTES do bgH
-      ensureArms(t);
+      ensureArms(t); // lava ANTES do bgH
 
       const bgH=document.createElement("img");
       bgH.className="pipe-bg bg-h";
       bgH.src = plusBgSrc("Horizontal");
       el.appendChild(bgH);
       t.bgElH = bgH;
-    } else {
+    }else{
       const bg=document.createElement("img");
       bg.className="pipe-bg";
       bg.src = bgSrcForSymbol(t.symbol, t.rot);
       el.appendChild(bg);
       t.bgEl = bg;
 
-      // lava (fora do '+', podemos criar aqui)
       ensureArms(t);
     }
 
-    // PNG do cano (por cima de tudo)
+    // (3) PNG do cano (por cima)
     const glyph=document.createElement("span");
     glyph.className="glyph";
+
     const img=document.createElement("img");
     img.className="tile-img";
     img.src = imgSrcForSymbol(t.symbol);
@@ -577,13 +583,11 @@
     el.appendChild(glyph);
     t.glyph=glyph;
 
-    // conectores e marcadores
     drawConnectors(el,t.symbol,t.rot);
     if(t.r===0&&t.c===0){ const m=document.createElement("div"); m.className="marker start"; m.textContent="▶"; el.appendChild(m); }
     if(t.r===0&&t.c===COLS-1){ const m=document.createElement("div"); m.className="marker end topright"; m.textContent="▶"; el.appendChild(m); }
     if(t.r===ROWS-1&&t.c===COLS-1){ const m=document.createElement("div"); m.className="marker end bottomright"; m.textContent="▶"; el.appendChild(m); }
 
-    // clique para girar
     el.addEventListener("click",()=>{
       if(t.lockedStart) return;
       if(filling.has(key(t.r,t.c))) return;
@@ -620,7 +624,7 @@
   }
   function isGoalExit(cell,outDir){
     if(cell.r===GOAL_TOP.r&&cell.c===GOAL_TOP.c&&outDir===GOAL_TOP.out&&!inBounds(step(cell,outDir).r,step(cell,outDir).c)) return "TOP";
-    if(cell.r===GOAL_BOTTOM.r&&cell.c===COLS-1&&outDir===GOAL_BOTTOM.out&&!inBounds(step(cell,outDir).r,step(cell,outDir).c)) return "BOTTOM";
+    if(cell.r===GOAL_BOTTOM.r&&cell.c===GOAL_BOTTOM.c&&outDir===GOAL_BOTTOM.out&&!inBounds(step(cell,outDir).r,step(cell,outDir).c)) return "BOTTOM";
     return null;
   }
 
@@ -641,18 +645,15 @@
       return {children:[], reachedTop:false, reachedBottom:false};
     }
 
-    // 1) entrada: BORDA -> CENTRO
     setArmOrigin(t, front.incoming, "toCenter");
     await animateArmTo(t, front.incoming, 1, FILL_HALF_MS);
 
-    // 2) saídas: do CENTRO -> BORDA
     const outs = outsFor(t, front.incoming);
     await Promise.all(outs.map(async (out)=>{
       setArmOrigin(t, out, "toBorder");
       await animateArmTo(t, out, 1, FILL_HALF_MS);
     }));
 
-    // flags corretos e push dos próximos tiles
     let reachedTop=false, reachedBottom=false;
     const children=[];
     for(const out of outs){
@@ -727,6 +728,31 @@
     filling.clear();
   }
 
+  // ===== Responsividade: calcula o tamanho ideal do tile p/ caber na tela =====
+  function setResponsiveTileSize(){
+    // Margens internas aproximadas do contêiner do grid
+    const boardPadding = 24; // .board padding ~12px * 2
+    const gamePadding = 20;  // #game padding 10px * 2
+    const gap = 6;           // #game gap
+    const extraVertical = 220; // título + botões + status (aprox)
+
+    const availW = Math.max(280, window.innerWidth - boardPadding - 16);
+    const availH = Math.max(280, window.innerHeight - extraVertical);
+
+    const totalGapsW = gap * (COLS - 1);
+    const totalGapsH = gap * (ROWS - 1);
+
+    const tileW = (availW - gamePadding - totalGapsW) / COLS;
+    const tileH = (availH - gamePadding - totalGapsH) / ROWS;
+
+    const size = Math.max(40, Math.min(84, Math.floor(Math.min(tileW, tileH))));
+    document.documentElement.style.setProperty('--tile', size + 'px');
+
+    // ajusta espessura da lava proporcional (mantém look)
+    const flow = Math.max(12, Math.floor(size * 0.36));
+    document.documentElement.style.setProperty('--flow-thick', flow + 'px');
+  }
+
   // ===== Reset / Start =====
   async function resetGame(){
     stopFlow();
@@ -743,6 +769,9 @@
     board.classList.add("dimmed");
     intro.classList.add("show");
     status("Mapa oculto. Clique em Iniciar para revelar e começar o fluxo.");
+
+    // garante layout certo ao iniciar/rotacionar
+    setResponsiveTileSize();
   }
 
   function startGame(){
@@ -757,7 +786,11 @@
   btnIntroStart.addEventListener("click", startGame);
   btnReset.addEventListener("click", resetGame);
 
+  window.addEventListener('resize', setResponsiveTileSize);
+  window.addEventListener('orientationchange', setResponsiveTileSize);
+
   // Init
+  setResponsiveTileSize();
   resetGame();
   </script>
 
