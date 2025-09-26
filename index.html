@@ -41,7 +41,15 @@
     .tile:hover{box-shadow:0 4px 12px #0009, inset 0 0 0 1px #2a3550}
     .tile.flow{background:var(--flow)}
     .tile.fail{background:var(--fail); box-shadow: 0 0 16px #ff4d4d55, inset 0 0 0 1px #3a1f26;}
-    .glyph{font-size:28px;font-weight:800;color:#80a6d8;opacity:.5; /* mais discreto para não parecer “água” */ position:relative; z-index:2; transition:transform .18s}
+    .glyph{font-size:28px;font-weight:800;color:#80a6d8;opacity:.1; /* mais discreto para não parecer “água” */ position:relative; z-index:2; transition:transform .18s}
+    .tile-img{
+      width:72%;
+      height:72%;
+      object-fit:contain;
+      pointer-events:none;       /* não bloquear clique de girar */
+      filter: drop-shadow(0 0 2px #0008);
+      display:block;
+    }
 
     /* “água” (inicia invisível) — agora com textura de lava e brilho lava */
     .arm{
@@ -207,6 +215,12 @@
   const sleep=ms=>new Promise(r=>setTimeout(r,ms));
   function rndChoice(arr){return arr[(Math.random()*arr.length)|0];}
   function randomInt(n){ return (Math.random()*n)|0; }
+  // Mapeia o símbolo ("T","L","-","+") para o PNG na pasta Assets/Imagens
+  function imgSrcForSymbol(sym){
+    // encodeURIComponent garante que '+' funcione em URL (vira %2B)
+    return `Assets/Imagens/${encodeURIComponent(sym)}.png`;
+  }
+
 
   function setArmOrigin(t, dir, phase){
     // phase: "toCenter" => borda->centro | "toBorder" => centro->borda
@@ -473,9 +487,17 @@
 
     const glyph=document.createElement("span");
     glyph.className="glyph";
-    glyph.textContent=t.symbol;
     glyph.style.transform=`rotate(${t.rot*90}deg)`;
+
+    // cria a imagem do cano e coloca dentro do wrapper que rotaciona
+    const img=document.createElement("img");
+    img.className="tile-img";
+    img.src = imgSrcForSymbol(t.symbol);
+    img.alt = t.symbol;
+    glyph.appendChild(img);
+
     el.appendChild(glyph);
+
 
     drawConnectors(el,t.symbol,t.rot);
 
