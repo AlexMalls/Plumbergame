@@ -11,7 +11,7 @@
       --blue:#4da6ff; --blue-dim:#7bb3ff;
       --red:#ff4d4d; --flow:#2b6cff22; --fail:#ff4d4d1f;
       --tile: 72px;
-      --flow-thick: 18px;
+      --flow-thick: 24px;
     }
     *{box-sizing:border-box}
     body{
@@ -41,58 +41,64 @@
     .tile:hover{box-shadow:0 4px 12px #0009, inset 0 0 0 1px #2a3550}
     .tile.flow{background:var(--flow)}
     .tile.fail{background:var(--fail); box-shadow: 0 0 16px #ff4d4d55, inset 0 0 0 1px #3a1f26;}
+
+    .pipe-bg{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      object-fit:contain;
+      z-index:0;             /* atrás da lava */
+      pointer-events:none;
+      filter: drop-shadow(0 0 2px #0009);
+    }
+
     /* O wrapper agora ocupa todo o tile */
     .glyph{
-      position: absolute;   /* antes era relative */
-      inset: 0;             /* sem padding/margin - ocupa 100% */
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transform-origin: 50% 50%;
-      font-size: 28px;      /* irrelevante agora, mas mantido */
-      font-weight: 800;
-      color: #80a6d8;
-      opacity: 1;           /* nada de imagem “lavada” */
-      z-index: 10;          /* acima da lava */
-      transition: transform .18s;
+      position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+      transform-origin:50% 50%;
+      opacity:1; z-index:10; transition:transform .18s;
     }
-    
-    /* A imagem preenche o container exatamente */
     .tile-img{
-      width: 100%;
-      height: 100%;
-      object-fit: contain;   /* PNG quadrado; se quiser cortar, use 'cover' */
-      pointer-events: none;
-      display: block;
-      position: relative;
-      z-index: 11;           /* acima da lava */
+      width:100%; height:100%; object-fit:contain;
+      pointer-events:none; display:block; position:relative; z-index:11;
       filter: drop-shadow(0 0 3px #000d) brightness(1.2) contrast(1.2);
     }
 
-
-
-
-    /* “água” (inicia invisível) — agora com textura de lava e brilho lava */
+    /* “água” (inicia invisível) — textura de lava */
     .arm{
       position:absolute; opacity:0;
       background-image: url("https://as2.ftcdn.net/v2/jpg/04/64/01/75/1000_F_464017578_mDXDssMUGQZ3tZxdepXwyWbYwYGJwU7A.jpg");
-      background-size: cover;       /* recorta automaticamente para a grossura do braço */
+      background-size: cover;
       background-position: center;
       background-repeat: no-repeat;
       box-shadow:0 0 8px #ff4500aa; /* brilho lava suave */
-      border-radius:99px; z-index:1;
+      border-radius:99px;
       transform: scaleX(0);
+      z-index:1; /* lava acima do fundo, abaixo do cano */
     }
-    .arm.top, .arm.bottom{ width: var(--flow-thick); height:50%; left: calc(50% - 6px); transform: scaleY(0); }
-    .arm.left, .arm.right{ height: var(--flow-thick); width:50%; top: calc(50% - 6px); }
+    /* AJUSTE: centralizada pela espessura */
+    .arm.top, .arm.bottom{
+      width: var(--flow-thick);
+      height:50%;
+      left: calc(50% - (var(--flow-thick) / 2));
+      transform: scaleY(0);
+    }
+    .arm.left, .arm.right{
+      height: var(--flow-thick);
+      width:50%;
+      top: calc(50% - (var(--flow-thick) / 2));
+    }
     .arm.top{ top:0; transform-origin: bottom; }
     .arm.bottom{ bottom:0; transform-origin: top; }
     .arm.left{ left:0; transform-origin: right; }
     .arm.right{ right:0; transform-origin: left; }
 
+    /* AJUSTE: conectores sempre por cima */
     .connector{
       position:absolute;width:14px;height:14px;border-radius:50%;
-      background:var(--blue);opacity:.9;box-shadow:0 0 12px var(--blue-dim); z-index:3;
+      background:var(--blue);opacity:.9;box-shadow:0 0 12px var(--blue-dim);
+      z-index:30;
     }
     .top{top:-4px;left:50%;transform:translateX(-50%)}
     .right{right:-4px;top:50%;transform:translateY(-50%)}
@@ -241,7 +247,15 @@
     // encodeURIComponent garante que '+' funcione em URL (vira %2B)
     return `Assets/Imagens/${encodeURIComponent(sym)}.png`;
   }
-
+  // AJUSTE: Fundo por símbolo com URL codificada (espaços e +)
+  function bgSrcForSymbol(sym, rot){
+    const base = "Assets/Imagens/";
+    if(sym === "+"){
+      const hv = (rot % 2 === 0) ? "Horizontal" : "Vertical";
+      return base + encodeURIComponent(`+ ${hv} background`) + ".png";
+    }
+    return base + encodeURIComponent(`${sym} Background`) + ".png";
+  }
 
   function setArmOrigin(t, dir, phase){
     // phase: "toCenter" => borda->centro | "toBorder" => centro->borda
@@ -498,45 +512,62 @@
       requestAnimationFrame(tick);
     });
   }
+  function updateTileVisual(t){
+    // Aplica rotação no cano e no fundo
+    if(t.glyph){
+      t.glyph.style.transform = `rotate(${t.rot*90}deg)`;
+    }
+    if(t.bgEl){
+      t.bgEl.style.transform = `rotate(${t.rot*90}deg)`;
+      t.bgEl.src = bgSrcForSymbol(t.symbol, t.rot);
+    }
+  }
 
   function makeTile(t){
     const el=document.createElement("div");
     el.className="tile";
     t.el=el;
 
+    // (1) FUNDO do cano (atrás da lava)
+    const bg=document.createElement("img");
+    bg.className="pipe-bg";
+    bg.src = bgSrcForSymbol(t.symbol, t.rot);
+    bg.alt = `${t.symbol} background`;
+    el.appendChild(bg);
+    t.bgEl = bg;
+
+    // (2) Lava
     ensureArms(t);
 
+    // (3) PNG do cano (por cima)
     const glyph=document.createElement("span");
     glyph.className="glyph";
-    glyph.style.transform=`rotate(${t.rot*90}deg)`;
 
-    // cria a imagem do cano e coloca dentro do wrapper que rotaciona
     const img=document.createElement("img");
     img.className="tile-img";
     img.src = imgSrcForSymbol(t.symbol);
     img.alt = t.symbol;
     glyph.appendChild(img);
-
     el.appendChild(glyph);
+    t.glyph=glyph;
 
-
+    // conectores e marcadores (mantém igual)
     drawConnectors(el,t.symbol,t.rot);
-
     if(t.r===0&&t.c===0){ const m=document.createElement("div"); m.className="marker start"; m.textContent="▶"; el.appendChild(m); }
     if(t.r===0&&t.c===COLS-1){ const m=document.createElement("div"); m.className="marker end topright"; m.textContent="▶"; el.appendChild(m); }
     if(t.r===ROWS-1&&t.c===COLS-1){ const m=document.createElement("div"); m.className="marker end bottomright"; m.textContent="▶"; el.appendChild(m); }
 
-    // Agora só bloqueia a peça que está sendo preenchida
+    // clique para girar
     el.addEventListener("click",()=>{
       if(t.lockedStart) return;
-      // if(t.lockedGoal) return;
-      if(filling.has(key(t.r,t.c))) return; // bloqueio fino: só a peça ativa
+      if(filling.has(key(t.r,t.c))) return; // só bloqueia se está enchendo
       t.rot=(t.rot+1)%4;
-      glyph.style.transform=`rotate(${t.rot*90}deg)`;
+      updateTileVisual(t);            // <<< atualiza rotação e fundo
       drawConnectors(el,t.symbol,t.rot);
     });
 
-    t.glyph=glyph;
+    // aplica estado inicial (rotação/fundo)
+    updateTileVisual(t);
     return el;
   }
 
@@ -712,7 +743,3 @@
 
 </body>
 </html>
-
-
-
-
