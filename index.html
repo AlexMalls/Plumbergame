@@ -41,17 +41,28 @@
     .tile:hover{box-shadow:0 4px 12px #0009, inset 0 0 0 1px #2a3550}
     .tile.flow{background:var(--flow)}
     .tile.fail{background:var(--fail); box-shadow: 0 0 16px #ff4d4d55, inset 0 0 0 1px #3a1f26;}
-    .glyph{font-size:28px;font-weight:800;color:#80a6d8;opacity:.1; /* mais discreto para não parecer “água” */ position:relative; z-index:2; transition:transform .18s}
+    .glyph{
+      font-size:28px;
+      font-weight:800;
+      color:#80a6d8;
+      opacity:1;              /* <<< era .1: deixa a imagem 100% visível */
+      position:relative;
+      z-index:6;              /* acima das arms */
+      transition:transform .18s;
+    }
+
     .tile-img{
       width:72%;
       height:72%;
       object-fit:contain;
-      pointer-events:none;
-      filter: drop-shadow(0 0 3px #000d) brightness(1.15) contrast(1.2);
+      pointer-events:none;             /* não bloqueia o clique de girar */
       display:block;
-      position: relative;
-      z-index: 5; /* >>> força ficar por cima da lava */
+      position:relative;
+      z-index:7;                       /* imagem do cano sempre por cima da lava */
+      /* deixa o cano menos “opaco” visualmente (mais vivo) */
+      filter: drop-shadow(0 1px 3px #000a) brightness(1.25) contrast(1.25) saturate(1.1);
     }
+
 
 
     /* “água” (inicia invisível) — agora com textura de lava e brilho lava */
@@ -694,4 +705,5 @@
 
 </body>
 </html>
+
 
