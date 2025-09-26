@@ -98,6 +98,15 @@
        - lava horizontal (left/right) deve ficar acima de todos os backgrounds (z=3) */
     .arm.left, .arm.right{ z-index:3; } /* acima dos bg-h e bg-v */
 
+    /* Ajuste de camadas específicas para o '+' */
+    .pipe-bg.bg-v { z-index: 0 !important; }  /* sempre atrás de tudo */
+    .pipe-bg.bg-h { z-index: 2 !important; }  /* na frente do vertical e da lava vertical */
+    .plus .arm.top,
+    .plus .arm.bottom { z-index: 1 !important; }  /* vertical: entre bg-v (0) e bg-h (2) */
+    .plus .arm.left,
+    .plus .arm.right { z-index: 3 !important; }   /* horizontal: acima dos dois backgrounds */
+    .plus .glyph { z-index: 10 !important; }
+
     /* Conectores: sempre por cima */
     .connector{
       position:absolute;width:14px;height:14px;border-radius:50%;
@@ -530,35 +539,36 @@
 
     // (1) FUNDOS
     if(t.symbol === "+"){
+      el.classList.add("plus");            // <<< aplica as regras de z-index do '+'
+
       const bgV=document.createElement("img");
       bgV.className="pipe-bg bg-v";
       bgV.src = plusBgSrc("Vertical");
-      bgV.alt = "+ vertical background";
       el.appendChild(bgV);
       t.bgElV = bgV;
+
+      // lava precisa vir ANTES do bgH
+      ensureArms(t);
 
       const bgH=document.createElement("img");
       bgH.className="pipe-bg bg-h";
       bgH.src = plusBgSrc("Horizontal");
-      bgH.alt = "+ horizontal background";
       el.appendChild(bgH);
       t.bgElH = bgH;
-    }else{
+    } else {
       const bg=document.createElement("img");
       bg.className="pipe-bg";
       bg.src = bgSrcForSymbol(t.symbol, t.rot);
-      bg.alt = `${t.symbol} background`;
       el.appendChild(bg);
       t.bgEl = bg;
+
+      // lava (fora do '+', podemos criar aqui)
+      ensureArms(t);
     }
 
-    // (2) Lava
-    ensureArms(t);
-
-    // (3) PNG do cano (por cima)
+    // PNG do cano (por cima de tudo)
     const glyph=document.createElement("span");
     glyph.className="glyph";
-
     const img=document.createElement("img");
     img.className="tile-img";
     img.src = imgSrcForSymbol(t.symbol);
@@ -610,7 +620,7 @@
   }
   function isGoalExit(cell,outDir){
     if(cell.r===GOAL_TOP.r&&cell.c===GOAL_TOP.c&&outDir===GOAL_TOP.out&&!inBounds(step(cell,outDir).r,step(cell,outDir).c)) return "TOP";
-    if(cell.r===GOAL_BOTTOM.r&&cell.c===GOAL_BOTTOM.c&&outDir===GOAL_BOTTOM.out&&!inBounds(step(cell,outDir).r,step(cell,outDir).c)) return "BOTTOM";
+    if(cell.r===GOAL_BOTTOM.r&&cell.c===COLS-1&&outDir===GOAL_BOTTOM.out&&!inBounds(step(cell,outDir).r,step(cell,outDir).c)) return "BOTTOM";
     return null;
   }
 
