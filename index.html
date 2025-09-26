@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>Pipe Puzzle — aleatório (com preenchimento lento)</title>
+  <title>Pipe Puzzle</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root{
@@ -72,7 +72,7 @@
       background-image: url("https://as2.ftcdn.net/v2/jpg/04/64/01/75/1000_F_464017578_mDXDssMUGQZ3tZxdepXwyWbYwYGJwU7A.jpg");
       background-size: cover; background-position: center; background-repeat: no-repeat;
       box-shadow:0 0 8px #ff4500aa;
-      border-radius:99px;
+      border-radius:66px;
       transform: scaleX(0);
       z-index:1; /* base: abaixo da imagem do cano e do bg-h */
     }
@@ -168,11 +168,10 @@
 </head>
 <body>
   <div class="wrap" id="wrap">
-    <h1>Pipe Puzzle — debug de conectores (aleatório)</h1>
+    <h1></h1>
     <div class="board" id="board">
       <div id="game"></div>
       <div class="hud">
-        <button id="btnStart">Iniciar</button>
         <button id="btnReset">Gerar novo</button>
       </div>
       <div id="status" class="status"></div>
@@ -180,7 +179,7 @@
       <!-- Véu inicial -->
       <div id="intro" class="overlay intro">
         <div class="loader">
-          <div class="msg">Mapa pronto. Clique para começar.</div>
+          <div class="msg">Clique para Iniciar</div>
           <button id="btnIntroStart" class="big">Iniciar</button>
         </div>
       </div>
@@ -763,3 +762,4 @@
 
 </body>
 </html>
+
